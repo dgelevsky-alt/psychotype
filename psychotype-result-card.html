@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PSYCHOTYPE — Одиссей</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Courier+Prime:ital@0;1&display=swap');
+
+  :root {
+    --bg: #080808;
+    --surface: #0f0f0f;
+    --border: #1e1e1e;
+    --accent: #c8a96e;
+    --accent2: #7a6040;
+    --text: #e0d8cc;
+    --muted: #555;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #050505;
+    color: var(--text);
+    font-family: 'Courier Prime', monospace;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .card {
+    max-width: 640px;
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+
+  /* HEADER */
+  .card-header {
+    text-align: center;
+    padding: 48px 32px 36px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+
+  .brand {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 11px;
+    letter-spacing: 6px;
+    color: var(--accent2);
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
+
+  .greek-name {
+    font-size: 9px;
+    letter-spacing: 5px;
+    color: var(--accent2);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .archetype-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(3rem, 10vw, 5rem);
+    font-weight: 300;
+    line-height: 1;
+    margin-bottom: 12px;
+    color: var(--text);
+  }
+
+  .archetype-title em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .myth {
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    font-style: italic;
+    margin-bottom: 32px;
+  }
+
+  /* BARS */
+  .bars { text-align: left; }
+
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .bar-label {
+    font-size: 8px;
+    letter-spacing: 1px;
+    color: var(--muted);
+    width: 140px;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    line-height: 1.4;
+  }
+
+  .bar-label small {
+    display: block;
+    font-size: 8px;
+    color: #333;
+    font-style: italic;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .bar-track { flex: 1; height: 1px; background: var(--border); }
+
+  .bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    animation: fillBar 1.5s ease forwards;
+  }
+
+  @keyframes fillBar { from { width: 0; } }
+
+  .bar-pct { font-size: 10px; color: var(--accent2); width: 28px; text-align: right; }
+
+  /* BLOCKS */
+  .blocks { padding: 0 32px 32px; }
+
+  .block {
+    border-left: 1px solid var(--border);
+    padding: 16px 20px;
+    margin-bottom: 8px;
+    background: var(--surface);
+    transition: border-color 0.3s;
+  }
+
+  .block:hover { border-left-color: var(--accent2); }
+
+  .block-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .block-title {
+    font-size: 8px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+
+  .block-sub { font-size: 9px; color: var(--muted); font-style: italic; }
+
+  .block-text { font-size: 12px; line-height: 1.85; color: #bbb; }
+
+  /* FORMULA */
+  .formula {
+    margin: 0 32px 24px;
+    border: 1px solid var(--border);
+    border-left: 2px solid var(--accent2);
+    padding: 20px;
+    background: #0a0808;
+  }
+
+  .formula-title {
+    font-size: 8px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .formula-row {
+    margin-bottom: 10px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #bbb;
+  }
+
+  .formula-row:last-child { margin-bottom: 0; }
+
+  .formula-row span {
+    font-size: 8px;
+    letter-spacing: 2px;
+    color: var(--accent2);
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  /* QUOTE */
+  .quote-section {
+    padding: 28px 32px;
+    text-align: center;
+    position: relative;
+    margin: 0 32px 32px;
+  }
+
+  .quote-section::before, .quote-section::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent2), transparent);
+  }
+
+  .quote-section::before { top: 0; }
+  .quote-section::after { bottom: 0; }
+
+  .quote {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: clamp(1rem, 2.5vw, 1.25rem);
+    font-weight: 300;
+    line-height: 1.6;
+    color: var(--accent);
+  }
+
+  /* FOOTER */
+  .card-footer {
+    padding: 16px 32px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .footer-brand {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 14px;
+    letter-spacing: 3px;
+    color: var(--accent2);
+  }
+
+  .footer-cta {
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .footer-url {
+    font-size: 9px;
+    color: var(--accent2);
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+
+  <div class="card-header">
+    <div class="brand">PSYCHOTYPE</div>
+    <div class="greek-name">ОДИССЕЙ</div>
+    <div class="archetype-title">Вечный <em>искатель</em></div>
+    <div class="myth">Всегда в пути — даже когда стоит на месте</div>
+
+    <div class="bars">
+      <div class="bar-row">
+        <div class="bar-label">Тип привязанности<small>как строит отношения</small></div>
+        <div class="bar-track"><div class="bar-fill" style="width:78%"></div></div>
+        <div class="bar-pct">78%</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Открытость<small>широта восприятия</small></div>
+        <div class="bar-track"><div class="bar-fill" style="width:94%"></div></div>
+        <div class="bar-pct">94%</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Нарциссизм<small>ощущение особенности</small></div>
+        <div class="bar-track"><div class="bar-fill" style="width:51%"></div></div>
+        <div class="bar-pct">51%</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Нейротизм<small>интенсивность переживаний</small></div>
+        <div class="bar-track"><div class="bar-fill" style="width:52%"></div></div>
+        <div class="bar-pct">52%</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Тень (Юнг)<small>скрытая часть личности</small></div>
+        <div class="bar-track"><div class="bar-fill" style="width:68%"></div></div>
+        <div class="bar-pct">68%</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="blocks">
+    <div class="block">
+      <div class="block-head">
+        <div class="block-title">Тип привязанности</div>
+        <div class="block-sub">как любит и уходит</div>
+      </div>
+      <div class="block-text">Твоя библиотека — это библиотека человека который не хочет быть привязан к одному образу себя. Nas и Tiësto. Queen и Lil Peep. Yann Tiersen и Big Baby Tape. В отношениях скорее всего то же самое — легко входит, легко уходит. Не потому что холодный. Потому что так безопаснее.</div>
+    </div>
+
+    <div class="block">
+      <div class="block-head">
+        <div class="block-title">Тёмная триада + Big Five</div>
+        <div class="block-sub">скрытые черты личности</div>
+      </div>
+      <div class="block-text">Kanye, Pusha T, Nas — это музыка людей которые знают себе цену. Ты тоже знаешь. Нарциссизм здоровый — не токсичный, скорее харизматичный. Открытость исключительная — такой диапазон вкусов бывает только у людей которые действительно живут широко.</div>
+    </div>
+
+    <div class="block">
+      <div class="block-head">
+        <div class="block-title">Энеаграмма — Тип 7</div>
+        <div class="block-sub">тип личности</div>
+      </div>
+      <div class="block-text">Энтузиаст. Генератор идей и энергии. Новое всегда интереснее старого. Hans Zimmer и Juno Reactor в одном плейлисте — это человек который умеет создавать себе кинематографическую реальность. Когда останавливаешься — приходит что-то неприятное. Поэтому лучше не останавливаться.</div>
+    </div>
+
+    <div class="block">
+      <div class="block-head">
+        <div class="block-title">Защитные механизмы</div>
+        <div class="block-sub">как справляешься с болью</div>
+      </div>
+      <div class="block-text">Бегство в действие и новизну. Новый жанр, новое настроение, новый горизонт. Это не слабость — это стратегия выживания которая когда-то работала. Вопрос только в том что она не даёт остановиться и посмотреть что внутри.</div>
+    </div>
+  </div>
+
+  <div class="formula">
+    <div class="formula-title">Итоговая формула</div>
+    <div class="formula-row"><span>Снаружи</span>Харизматичный человек у которого всегда новый проект и новая история.</div>
+    <div class="formula-row"><span>Внутри</span>Человек который ищет что-то что наконец скажет ему кто он есть.</div>
+    <div class="formula-row"><span>Сила</span>Энергия, широта, способность зажигать людей вокруг.</div>
+    <div class="formula-row"><span>Уязвимость</span>Уходит раньше чем становится по-настоящему близко.</div>
+  </div>
+
+  <div class="quote-section">
+    <div class="quote">Ты слушаешь всё — потому что ещё не нашёл то единственное что скажет тебе кто ты на самом деле.</div>
+  </div>
+
+  <div class="card-footer">
+    <div class="footer-brand">PSYCHOTYPE</div>
+    <div>
+      <div class="footer-cta">Узнай свой архетип</div>
+      <div class="footer-url">psychotype.com</div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
