@@ -452,7 +452,7 @@ async function analyze() {
   } catch(err) {
     loading.classList.remove('visible');
     document.getElementById('form-section').style.display='block';
-    alert('Ошибка. Попробуй ещё раз.');
+    alert('Ошибка: ' + err.message);
   }
 }
 
