@@ -39,7 +39,7 @@ exports.handler = async function (event) {
       })
     });
 
-    const data = ",await anthropicRes.json();
+    const data = await anthropicRes.json();
 console.log("Anthropic response status:", anthropicRes.status, "body:", JSON.stringify(data));
     if (!anthropicRes.ok) {
       return {
