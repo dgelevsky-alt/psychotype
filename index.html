@@ -121,7 +121,7 @@
     background: linear-gradient(90deg, transparent, var(--accent), transparent);
   }
 
-  .archetype-greek { font-size: 9px; letter-spacing: 5px; color: var(--accent2); text-transform: uppercase; margin-bottom: 12px; }
+  .archetype-greek { font-size: 9px; letter-spacing: 5px; color: var(--accent2); text-transform: uppercase; margin-bottom: 12px; min-height: 1px; }
 
   .archetype-name {
     font-family: 'Cormorant Garamond', serif;
@@ -217,7 +217,7 @@
     </div>
 
     <div class="error-msg" id="error-msg">Введи хотя бы 3 исполнителя</div>
-    <button class="analyze-btn" onclick="analyze()">Узнать свой архетип</button>
+    <button class="analyze-btn" onclick="analyze()">Узнать свой психотип</button>
     <div class="footer">© 2026 Psychotype · Daniel Gelevsky</div>
   </div>
 
@@ -238,62 +238,7 @@
     <button class="reset-btn" onclick="reset()">← пройти заново</button>
   </div>
 
-</div>
-
-<script>
-const ARCHETYPES = {
-  orpheus: {
-    greek: 'ОРФЕЙ',
-    myth: 'Спустился в ад ради любви — и оглянулся',
-    artists: ['the smiths','lana del rey','placebo','sia','аффинаж','adele','ed sheeran','taylor swift','billie eilish','amy winehouse','земфира','монеточка','james blunt','sam smith','lewis capaldi']
-  },
-  poseidon: {
-    greek: 'ПОСЕЙДОН',
-    myth: 'Глубже океана — и так же непостижим',
-    artists: ['lebanon hanover','molchat doma','massive attack','portishead','кино','the xx','james blake','nick drake','cigarettes after sex','beach house','grouper','chelsea wolfe','ploho']
-  },
-  prometheus: {
-    greek: 'ПРОМЕТЕЙ',
-    myth: 'Нёс огонь которого другие боялись',
-    artists: ['marilyn manson','nine inch nails','radiohead','crystal castles','культодиночества','eminem','kanye west','nirvana','linkin park','rage against the machine','oxxxymiron','system of a down','tool','björk','thom yorke']
-  },
-  hephaestus: {
-    greek: 'ГЕФЕСТ',
-    myth: 'Создавал шедевры для всех — невидимый для всех',
-    artists: ['bon iver','woodkid','damien rice','sigur ros','буерак','coldplay','u2','phil collins','imagine dragons','onerepublic','snow patrol','keane','passenger']
-  },
-  narcissus: {
-    greek: 'НАРЦИСС',
-    myth: 'Искал себя в другом — и не мог ни приблизиться ни уйти',
-    artists: ['the cure','twin tribes','she past away','siouxsie','the weeknd','drake','frank ocean','lorde','fka twigs','clan of xymox','selofan','hante']
-  },
-  odysseus: {
-    greek: 'ОДИССЕЙ',
-    myth: 'Всегда в пути — даже когда стоит на месте',
-    artists: ['tame impala','royksopp','gorillaz','air','daft punk','david bowie','beck','mgmt','vampire weekend','foals','tame impala','alt-j','arcade fire','radiohead']
-  },
-  hermes: {
-    greek: 'ГЕРМЕС',
-    myth: 'Читает людей как открытую книгу',
-    artists: ['depeche mode','interpol','iamx','jay-z','kendrick lamar','madonna','stromae','miles davis','saint motel','hurts','editors','white lies']
-  },
-  cassandra: {
-    greek: 'КАССАНДРА',
-    myth: 'Видела правду — которой никто не верил',
-    artists: ['nick cave','protomartyr','leonard cohen','tom waits','johnny cash','blur','янка дягилева','swans','current 93','dead can dance','rome']
-  },
-  dionysus: {
-    greek: 'ДИОНИС',
-    myth: 'Живёт на полную — и сгорает красиво',
-    artists: ['the prodigy','ic3peak','death grips','ac/dc','led zeppelin','red hot chili peppers','travis scott','rammstein','кровосток','die antwoord','n.e.r.d','migos','21 savage']
-  },
-  sisyphus: {
-    greek: 'СИЗИФ',
-    myth: 'Катит камень снова и снова — и снова идёт за ним',
-    artists: ['muse','tool','deftones','metallica','kate bush','arcade fire','porcupine tree','steven wilson','opeth','karnivool','tesseract','leprous']
-  }
-};
-
+</div><script>
 const presets = {
   dark: ['Lebanon Hanover','She Past Away','Twin Tribes','Crystal Castles','Hante','Selofan','Molchat Doma','Clan of Xymox'],
   indie: ['Radiohead','Bon Iver','Portishead','Massive Attack','Beach House','Tame Impala','Nick Drake','James Blake'],
@@ -301,7 +246,7 @@ const presets = {
   russian: ['Земфира','Кино','Аффинаж','Буерак','Монеточка','Oxxxymiron','Ploho','культодиночества']
 };
 
-const loadingTexts = ['Читаю твою душу...','Ищу твой архетип...','Погружаюсь в музыку...','Слышу тебя между строк...'];
+const loadingTexts = ['Читаю твою душу...','Ищу твой психотип...','Погружаюсь в музыку...','Слышу тебя между строк...'];
 
 function loadPreset(name) {
   const slots = document.querySelectorAll('.artist-slot');
@@ -310,29 +255,6 @@ function loadPreset(name) {
 
 function getArtists() {
   return Array.from(document.querySelectorAll('.artist-slot')).map(s=>s.value.trim()).filter(Boolean);
-}
-
-function detectArchetype(artists) {
-  const lower = artists.map(a => a.toLowerCase());
-  const scores = {};
-  for(const [key, arch] of Object.entries(ARCHETYPES)) {
-    scores[key] = 0;
-    for(const artist of lower) {
-      for(const known of arch.artists) {
-        if(artist.includes(known) || known.includes(artist)) scores[key] += 2;
-        else if(levenshtein(artist, known) <= 2) scores[key] += 1;
-      }
-    }
-  }
-  return Object.entries(scores).sort((a,b)=>b[1]-a[1])[0][0];
-}
-
-function levenshtein(a, b) {
-  const m = a.length, n = b.length;
-  const dp = Array.from({length:m+1}, (_,i) => Array.from({length:n+1}, (_,j) => i===0?j:j===0?i:0));
-  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++)
-    dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1] : 1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
-  return dp[m][n];
 }
 
 async function analyze() {
@@ -345,19 +267,20 @@ async function analyze() {
   loading.classList.add('visible');
   document.getElementById('loading-text').textContent = loadingTexts[Math.floor(Math.random()*loadingTexts.length)];
 
-  const detectedKey = detectArchetype(artists);
-  const arch = ARCHETYPES[detectedKey];
-
   const prompt = `Ты — психолог, работающий строго в рамках эмпирически подтверждённых моделей личности. Список любимых исполнителей человека: ${artists.join(', ')}.
 
-Проанализируй музыкальные предпочтения и выведи психологический портрет, используя ТОЛЬКО три научно валидированные модели:
+Это не клиническая диагностика, а вероятностный психологический портрет, построенный на музыкальных предпочтениях как одном из сигналов личности. Не заявляй абсолютную точность.
+
+ШАГ 1 — сначала найди пересечение: что объединяет именно ЭТИХ артистов вместе — по настроению, эмоциональной насыщенности, интроспективности, агрессии, романтизму, отчуждённости, интеллектуальной сложности, мрачности. На первый взгляд артисты могут казаться разными — найди, что их реально связывает.
+
+ШАГ 2 — только из этого пересечения выведи психологический портрет, используя ТОЛЬКО три научно валидированные модели:
 1. Большая пятёрка (Big Five/OCEAN) — открытость, добросовестность, экстраверсия, доброжелательность, нейротизм
 2. Теория привязанности (Боулби/Эйнсворт) — надёжный/тревожный/избегающий/дезорганизованный тип
 3. Тёмная триада (Полхус и Уильямс) — нарциссизм, макиавеллизм, психопатия
 
 ВАЖНО: не используй архетипы, мифологию, эннеаграмму, соционику, тест Люшера, транзактный анализ или пирамиду Маслоу — только три модели выше.
 
-Каждый вывод обосновывай конкретной связью с введёнными артистами — не общими фразами. Термины объясняй так, будто человек никогда не изучал психологию — используй метафоры, а не сухие определения.
+В каждом текстовом блоке (b1_text, b2_text, b3_text) обязательно назови минимум 2-3 конкретных артиста из списка по имени и объясни через них вывод — не общими фразами, которые подошли бы кому угодно. Термины объясняй так, будто человек никогда не изучал психологию — используй метафоры, а не сухие определения.
 
 Ответь ТОЛЬКО в JSON (без markdown):
 {
@@ -388,6 +311,7 @@ async function analyze() {
   "f_strength": "главная сила",
   "f_weakness": "главная уязвимость"
 }`;
+
   try {
     const res = await fetch("/.netlify/functions/analyze", {
       method: "POST",
@@ -401,9 +325,9 @@ async function analyze() {
 
     loading.classList.remove('visible');
 
-    document.getElementById('archetype-greek').textContent = arch.greek;
-    document.getElementById('archetype-name').textContent = arch.greek;
-    document.getElementById('archetype-sub').textContent = p.archetype_sub || arch.myth;
+    document.getElementById('archetype-greek').textContent = '';
+    document.getElementById('archetype-name').textContent = p.title;
+    document.getElementById('archetype-sub').textContent = p.subtitle;
 
     const barsEl = document.getElementById('bars');
     barsEl.innerHTML = '';
@@ -418,7 +342,7 @@ async function analyze() {
     const blocksEl = document.getElementById('result-blocks');
     blocksEl.innerHTML = '';
 
-    [['b1',''],['b2',''],['b3',''],['b4',''],['b5',''],['b6','']].forEach(([key]) => {
+    [['b1',''],['b2',''],['b3','']].forEach(([key]) => {
       if(!p[key+'_title']) return;
       blocksEl.innerHTML += `<div class="result-block">
         <div class="block-header">
