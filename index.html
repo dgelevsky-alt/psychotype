@@ -238,7 +238,8 @@
     <button class="reset-btn" onclick="reset()">← пройти заново</button>
   </div>
 
-</div><script>
+</div>
+<script>
 const presets = {
   dark: ['Lebanon Hanover','She Past Away','Twin Tribes','Crystal Castles','Hante','Selofan','Molchat Doma','Clan of Xymox'],
   indie: ['Radiohead','Bon Iver','Portishead','Massive Attack','Beach House','Tame Impala','Nick Drake','James Blake'],
@@ -280,7 +281,13 @@ async function analyze() {
 
 ВАЖНО: не используй архетипы, мифологию, эннеаграмму, соционику, тест Люшера, транзактный анализ или пирамиду Маслоу — только три модели выше.
 
-В каждом текстовом блоке (b1_text, b2_text, b3_text) обязательно назови минимум 2-3 конкретных артиста из списка по имени и объясни через них вывод — не общими фразами, которые подошли бы кому угодно. Термины объясняй так, будто человек никогда не изучал психологию — используй метафоры, а не сухие определения.
+Для блока Большой пятёрки (b1) — не пиши один слитный абзац. Разбери КАЖДУЮ из пяти черт ОТДЕЛЬНЫМ пунктом (b1_openness, b1_conscientiousness, b1_extraversion, b1_agreeableness, b1_neuroticism) — 1-2 предложения на черту, с привязкой к конкретному артисту или паре артистов. Не повторяй одних и тех же артистов в каждом пункте — распредели обоснования по разным исполнителям из списка.
+
+Для блоков b2 и b3 — как раньше, назови минимум 2-3 конкретных артиста по имени.
+
+Добавь четвёртый блок (b4) — "Практическое проявление": не новая модель, а синтез уже выведенных данных (Big Five + привязанность + тёмная триада) применительно к реальной жизни — как это выражается в отношениях, работе, творчестве. 4-5 предложений, конкретно, без общих слов.
+
+Термины объясняй так, будто человек никогда не изучал психологию — используй метафоры, а не сухие определения.
 
 Ответь ТОЛЬКО в JSON (без markdown):
 {
@@ -299,13 +306,20 @@ async function analyze() {
   ],
   "b1_title": "Большая пятёрка",
   "b1_plain": "пять базовых черт личности",
-  "b1_text": "5-6 предложений синтеза всех пяти черт через конкретных артистов",
+  "b1_openness": "1-2 предложения про открытость опыту через конкретного артиста",
+  "b1_conscientiousness": "1-2 предложения про добросовестность через конкретного артиста",
+  "b1_extraversion": "1-2 предложения про экстраверсию через конкретного артиста",
+  "b1_agreeableness": "1-2 предложения про доброжелательность через конкретного артиста",
+  "b1_neuroticism": "1-2 предложения про нейротизм через конкретного артиста",
   "b2_title": "Тип привязанности",
   "b2_plain": "как любишь и боишься",
   "b2_text": "4-5 предложений через конкретных артистов",
   "b3_title": "Тёмная триада",
   "b3_plain": "скрытые черты личности",
   "b3_text": "4-5 предложений через конкретных артистов",
+  "b4_title": "Практическое проявление",
+  "b4_plain": "как это работает в жизни",
+  "b4_text": "4-5 предложений: отношения, работа, творчество",
   "f_outside": "снаружи одна строчка",
   "f_inside": "внутри одна строчка",
   "f_strength": "главная сила",
@@ -342,7 +356,27 @@ async function analyze() {
     const blocksEl = document.getElementById('result-blocks');
     blocksEl.innerHTML = '';
 
-    [['b1',''],['b2',''],['b3','']].forEach(([key]) => {
+    if(p.b1_title) {
+      const traits = [
+        ['Открытость опыту', p.b1_openness],
+        ['Добросовестность', p.b1_conscientiousness],
+        ['Экстраверсия', p.b1_extraversion],
+        ['Доброжелательность', p.b1_agreeableness],
+        ['Нейротизм', p.b1_neuroticism]
+      ];
+      let traitsHtml = traits.filter(t=>t[1]).map(t =>
+        `<div style="margin-bottom:14px"><b style="color:var(--accent);font-size:12px;letter-spacing:1px;text-transform:uppercase">${t[0]}</b><br>${t[1]}</div>`
+      ).join('');
+      blocksEl.innerHTML += `<div class="result-block">
+        <div class="block-header">
+          <div class="block-title">${p.b1_title}</div>
+          <div class="block-sub">${p.b1_plain}</div>
+        </div>
+        <div class="block-text">${traitsHtml}</div>
+      </div>`;
+    }
+
+    [['b2',''],['b3',''],['b4','']].forEach(([key]) => {
       if(!p[key+'_title']) return;
       blocksEl.innerHTML += `<div class="result-block">
         <div class="block-header">
