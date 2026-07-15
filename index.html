@@ -260,6 +260,9 @@ const presets = {
 
 const loadingTexts = ['Читаю твою душу...','Ищу твой психотип...','Погружаюсь в музыку...','Слышу тебя между строк...'];
 
+const BANNED_WORDS = ['одиночество','молчание','глубина','дистанция','темнота','стены'];
+const BANNED_WORD_LIMIT = 2;
+
 function loadPreset(name) {
   const slots = document.querySelectorAll('.artist-slot');
   presets[name].forEach((a,i) => { if(slots[i]) slots[i].value = a; });
@@ -267,6 +270,193 @@ function loadPreset(name) {
 
 function getArtists() {
   return Array.from(document.querySelectorAll('.artist-slot')).map(s=>s.value.trim()).filter(Boolean);
+}
+
+// Безопасная вставка текста: экранирует HTML, чтобы ответ модели
+// не мог вставить теги/скрипты на страницу
+function escapeHtml(str) {
+  if(str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function wordCount(str) {
+  if(!str) return 0;
+  return String(str).trim().split(/\s+/).filter(Boolean).length;
+}
+
+function countOccurrences(text, word) {
+  if(!text) return 0;
+  const re = new RegExp(word, 'gi');
+  const m = text.match(re);
+  return m ? m.length : 0;
+}
+
+// Модель иногда возвращает числа строками ("82" вместо 82).
+// Приводим к числу там, где это безопасно, до валидации.
+function toNumber(v) {
+  if(typeof v === 'number') return v;
+  if(typeof v === 'string' && v.trim() !== '' && !isNaN(v)) return Number(v);
+  return NaN;
+}
+
+function normalizeProfile(p) {
+  if(!p || typeof p !== 'object') return p;
+  (p.bars||[]).forEach(b => { b.value = toNumber(b.value); });
+  if(p.musicPattern) (p.musicPattern.dna||[]).forEach(d => { d.score = toNumber(d.score); });
+  if(p.closeness) p.closeness.confidence = toNumber(p.closeness.confidence);
+  return p;
+}
+
+// Проверяет структуру и качество профиля. Возвращает { ok, errors }
+function validateProfile(p, artists) {
+  const errors = [];
+
+  if(!p || typeof p !== 'object') return { ok:false, errors:['profile is not an object'] };
+
+  if(!p.title || wordCount(p.title) < 2) errors.push('title missing or too short');
+  if(!p.subtitle) errors.push('subtitle missing');
+
+  if(!Array.isArray(p.essenceTags) || p.essenceTags.length !== 3) errors.push('essenceTags must be array of exactly 3');
+
+  if(!Array.isArray(p.bars) || p.bars.length !== 5) {
+    errors.push('bars must be array of exactly 5');
+  } else {
+    p.bars.forEach((b,i) => {
+      if(isNaN(b.value) || b.value < 0 || b.value > 100) errors.push(`bars[${i}].value out of range`);
+      if(!b.label) errors.push(`bars[${i}].label missing`);
+    });
+  }
+
+  if(!p.musicPattern || !p.musicPattern.text) errors.push('musicPattern.text missing');
+  if(p.musicPattern && !Array.isArray(p.musicPattern.dna)) errors.push('musicPattern.dna must be array');
+
+  if(!Array.isArray(p.chapters) || p.chapters.length !== 4) {
+    errors.push('chapters must be array of exactly 4');
+  } else {
+    p.chapters.forEach((c,i) => {
+      if(!c.title || !c.text) errors.push(`chapters[${i}] missing title/text`);
+      const wc = wordCount(c.text);
+      if(wc > 130) errors.push(`chapters[${i}] too long (${wc} words)`);
+    });
+  }
+
+  if(!p.blindSpot || !p.blindSpot.text) errors.push('blindSpot.text missing');
+  if(p.blindSpot && wordCount(p.blindSpot.text) > 120) errors.push('blindSpot too long');
+
+  if(!p.closeness || !p.closeness.text) errors.push('closeness.text missing');
+  if(p.closeness) {
+    if(wordCount(p.closeness.text) > 110) errors.push('closeness too long');
+    if(![1,2,3].includes(p.closeness.confidence)) errors.push('closeness.confidence must be 1-3');
+  }
+
+  // artistNotes должен покрывать КАЖДОГО артиста из пользовательского списка,
+  // а не только тех, кого модель решила упомянуть
+  if(Array.isArray(artists) && artists.length) {
+    if(!Array.isArray(p.artistNotes)) {
+      errors.push('artistNotes missing');
+    } else {
+      const covered = new Set(
+        p.artistNotes.map(n => (n.inputName||'').trim().toLowerCase())
+      );
+      artists.forEach(a => {
+        if(!covered.has(a.trim().toLowerCase())) errors.push(`artistNotes missing entry for "${a}"`);
+      });
+    }
+  }
+
+  if(!p.shadow || !p.shadow.text) errors.push('shadow.text missing');
+
+  if(!p.musicFunction || !Array.isArray(p.musicFunction.helps) || !Array.isArray(p.musicFunction.traps)) {
+    errors.push('musicFunction.helps/traps must be arrays');
+  }
+
+  if(!p.finalFormula || !p.finalFormula.outside || !p.finalFormula.inside || !p.finalFormula.strength || !p.finalFormula.vulnerability) {
+    errors.push('finalFormula incomplete');
+  }
+
+  if(!p.finalQuote || wordCount(p.finalQuote) < 5) errors.push('finalQuote missing or too short');
+
+  // Проверка повторов запрещённых слов по всему тексту
+  const allText = [
+    p.musicPattern && p.musicPattern.text,
+    ...(p.chapters||[]).map(c=>c.text),
+    p.blindSpot && p.blindSpot.text,
+    p.closeness && p.closeness.text,
+    p.shadow && p.shadow.text,
+    p.finalQuote
+  ].filter(Boolean).join(' ');
+
+  BANNED_WORDS.forEach(w => {
+    const count = countOccurrences(allText, w);
+    if(count > BANNED_WORD_LIMIT) errors.push(`word "${w}" used ${count} times (max ${BANNED_WORD_LIMIT})`);
+  });
+
+  return { ok: errors.length === 0, errors };
+}
+
+function buildPrompt(artists, retryErrors) {
+  let retryNote = '';
+  if(retryErrors && retryErrors.length) {
+    retryNote = `\n\nПРЕДЫДУЩАЯ ПОПЫТКА НЕ ПРОШЛА ПРОВЕРКУ. Исправь эти конкретные проблемы:\n${retryErrors.join('\n')}\n`;
+  }
+
+  return `Ты — литературный редактор PSYCHOTYPE, автор психологических портретов по музыкальному вкусу. Список любимых исполнителей человека: ${artists.join(', ')}.${retryNote}
+
+ГЛАВНАЯ ФОРМУЛА: музыка даёт основания, Big Five даёт структуру, литературный текст даёт узнавание себя. Примерно 25% текста — про музыку, 75% — литературный портрет человека: противоречия, поведение, сила и риск. Музыка ПОДТВЕРЖДАЕТ вывод, а не пересказывает список артистов.
+
+ИМЕНА АРТИСТОВ: для каждого имени в списке верни объект с полями inputName (точно как ввёл пользователь) и canonicalName (вероятное правильное написание, если ты уверен, что в имени опечатка или неточность; если сомневаешься — canonicalName = inputName). Также укажи status: "known" если ты уверенно знаешь артиста и его стиль, "uncertain" если знаешь плохо или не уверен. НЕ выдумывай факты про uncertain-артистов и не строй на них конкретные выводы — учитывай только как часть общего сочетания.
+
+Внутренний каркас (не показывай как список терминов):
+1. Большая пятёрка (Big Five/OCEAN) — видима, но вплетена в главы, не пересказана пятью сухими абзацами
+2. Теория привязанности — коротко и осторожно, без диагноза типа привязанности
+
+СТРОГИЙ РЕДАКЦИОННЫЙ РЕГЛАМЕНТ:
+- Не выдумывай конкретные бытовые привычки ("редко смеёшься", "даёшь три шанса") — это выдуманная биография
+- Не утверждай конкретные травмы и страхи (страх покинутости, страх поглощения и т.п.)
+- Запрещены клишированные ИИ-метафоры: электричество, синтетические пустоты, подземелья, витраж отчуждения, тень красоты
+- Слова "глубина", "боль", "молчание", "одиночество", "темнота", "стены" — максимум 2 раза каждое во всём ответе
+- Три essenceTags должны быть РАЗНЫМИ по смыслу, не синонимами
+- Название (title) — естественное, без вычурных метафор
+- КАЖДАЯ из четырёх глав должна иметь уникальный смысловой центр: 1) восприятие мира, 2) принятие решений и доведение до результата, 3) контакт и конфликт с людьми, 4) главное внутреннее противоречие. Не варьируй один и тот же мотив четыре раза
+- Глава = 70-110 слов, СТРОГО не больше 120
+- blindSpot = 70-100 слов, один настоящий инсайт, не комплимент
+- closeness = 60-90 слов, с пометкой неуверенности внутри текста, confidence — целое число 1-3
+- ВСЕ заголовки — законченные фразы, без "?"
+- Финальная цитата — без диагностики травмы, 15-25 слов
+
+Ответь ТОЛЬКО в JSON (без markdown), СТРОГО соблюдая структуру:
+{
+  "title": "название 2-5 слов",
+  "subtitle": "фраза-подзаголовок 8-15 слов",
+  "essenceTags": ["характеристика 1", "характеристика 2", "характеристика 3"],
+< truncated lines 185-225 >
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt: prompt })
+  });
+
+  if(!res.ok) {
+    throw new Error(`Сервер ответил с ошибкой (${res.status}). Попробуй ещё раз через минуту.`);
+  }
+
+  const data = await res.json();
+
+  if(!data || !Array.isArray(data.content)) {
+    throw new Error('Неожиданный формат ответа сервера.');
+  }
+
+  const text = data.content.map(i=>i.text||'').join('');
+  let parsed;
+  try {
+    parsed = JSON.parse(text.replace(/```json|```/g,'').trim());
+  } catch(e) {
+    throw new Error('Не удалось разобрать ответ модели как JSON.');
+  }
+  return parsed;
 }
 
 async function analyze() {
@@ -279,97 +469,24 @@ async function analyze() {
   loading.classList.add('visible');
   document.getElementById('loading-text').textContent = loadingTexts[Math.floor(Math.random()*loadingTexts.length)];
 
-  const prompt = `Ты — редактор PSYCHOTYPE, автор литературных психологических портретов по музыкальному вкусу. Список любимых исполнителей человека (используй ТОЧНО это написание имён, не исправляй и не изменяй): ${artists.join(', ')}.
-
-Это не клинический тест и не гороскоп. Это персональное эссе о человеке на основе повторяющихся эмоциональных, эстетических и смысловых паттернов его любимой музыки. Психологические модели — внутренний каркас, невидимый пользователю. Пользователь должен пережить момент узнавания себя, а не читать отчёт.
-
-Внутренний каркас (не показывай как список терминов):
-1. Большая пятёрка (Big Five/OCEAN)
-2. Теория привязанности (Боулби/Эйнсворт) — используй ОСТОРОЖНО и КРАТКО
-3. Тёмная триада (Полхус и Уильямс)
-
-СТРОГИЙ РЕДАКЦИОННЫЙ РЕГЛАМЕНТ:
-- Если артист малоизвестен или ты не уверен, что знаешь его — не выдумывай про него факты, учитывай только как часть общего сочетания
-- НЕ утверждай, как человека воспринимают другие люди ("тебя часто называют...") — только то, что можно вывести из музыки
-- НЕ описывай конкретную историю отношений, травму, отвержение, страх покинутости — только общий паттерн с пометкой неуверенности
-- Слова "глубина", "боль", "молчание", "одиночество", "темнота" — использовать МАКСИМУМ 2 раза каждое во всём ответе. Используй разную лексику для похожих идей
-- Каждый раздел должен раскрывать НОВУЮ тему, не повторять "ты сложный и закрытый" пять раз разными словами: worldExperience[0] — про восприятие мира, worldExperience[1] — про действие/поведение, worldExperience[2] — про эстетический вкус или самообман
-- Блок closeness — МАКСИМУМ 90-120 слов, обязательно с явной пометкой неуверенности внутри текста (например "музыкальный вкус даёт здесь лишь слабый сигнал")
-- ВСЕ заголовки — законченные грамматические фразы. Никаких вопросительных или оборванных заголовков
-- Если в списке есть заметный контраст между артистами — опиши его в поле contrast как полноценный связный текст, а не служебную пометку
-- Финальная цитата (finalQuote) не должна диагностировать травму, депрессию или страх покинутости — красиво, но не трагично сверх меры
-- Используй короткие предложения, конкретные образы, живой язык. Термины объясняй бытовым языком
-- Не льсти автоматически — показывай сильную сторону И риск/уязвимость в каждом крупном блоке
-- Название портрета (title) — образное, узнаваемое, 2-5 слов, без вычурных ИИ-метафор вроде "миры из молчания и электричества" — понятное человеку с первого прочтения
-
-Ответь ТОЛЬКО в JSON (без markdown):
-{
-  "title": "образное понятное название портрета 2-5 слов",
-  "subtitle": "одна поэтичная, но ясная фраза-подзаголовок 8-15 слов",
-  "essenceTags": ["короткий маркер 2-3 слова", "короткий маркер", "короткий маркер"],
-  "bars": [
-    {"label": "Открытость опыту", "plain": "широта восприятия мира", "value": 85},
-    {"label": "Добросовестность", "plain": "организованность и самодисциплина", "value": 60},
-    {"label": "Экстраверсия", "plain": "откуда берёшь энергию", "value": 40},
-    {"label": "Доброжелательность", "plain": "склонность к сотрудничеству", "value": 55},
-    {"label": "Нейротизм", "plain": "интенсивность переживаний", "value": 78}
-  ],
-  "musicPattern": {
-    "text": "3-5 предложений о том, что объединяет ВСЕ перечисленные артисты вместе, называя минимум 3 из них по имени точно как в списке",
-    "dna": [
-      {"label": "Интроспекция", "score": 88},
-      {"label": "Экзистенциальность", "score": 81},
-      {"label": "Экспериментальность", "score": 74},
-      {"label": "Эмоциональная дистанция", "score": 69}
-    ]
-  },
-  "contrast": {
-    "title": "Самый сильный контраст в твоём списке",
-    "text": "2-3 предложения о том, какие два артиста сильнее всего контрастируют и что это напряжение говорит о человеке — только если контраст реально заметен, иначе оставь пустой строкой"
-  },
-  "worldExperience": [
-    {"title": "заголовок про восприятие мира, 4-7 слов, законченная фраза", "text": "2-3 предложения, литературно, без терминов"},
-    {"title": "заголовок про действие или поведение, 4-7 слов, законченная фраза", "text": "2-3 предложения, литературно, без терминов"},
-    {"title": "заголовок про эстетический вкус или самообман, 4-7 слов, законченная фраза", "text": "2-3 предложения, литературно, без терминов"}
-  ],
-  "centralConflict": {
-    "title": "заголовок внутреннего конфликта 5-9 слов, законченная фраза",
-    "text": "3-4 предложения о главном внутреннем противоречии, без выдуманных биографических деталей",
-    "basis": "одна короткая строка — на чём основан вывод"
-  },
-  "closeness": {
-    "title": "Как ты подпускаешь людей",
-    "text": "МАКСИМУМ 90-120 слов, с явной пометкой неуверенности внутри текста",
-    "confidence": 2
-  },
-  "shadow": {
-    "title": "Когда защита становится характером",
-    "text": "3-4 предложения о теневой стороне — как сильная сторона превращается в ловушку, без диагнозов"
-  },
-  "musicFunction": {
-    "helps": ["короткий пункт", "короткий пункт"],
-    "traps": ["короткий пункт", "короткий пункт"],
-    "growth": "одна честная фраза о точке роста"
-  },
-  "finalFormula": {
-    "outside": "снаружи — одна строка",
-    "inside": "внутри — одна строка",
-    "strength": "главная сила — одна строка",
-    "vulnerability": "главная уязвимость — одна строка"
-  },
-  "finalQuote": "красивая финальная фраза-зеркало 15-25 слов — поэтичная, но не диагностирующая травму или страх покинутости"
-}`;
-
   try {
-    const res = await fetch("/.netlify/functions/analyze", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: prompt })
-    });
+    let p = normalizeProfile(await callModel(buildPrompt(artists)));
+    let check = validateProfile(p, artists);
 
-    const data = await res.json();
-    const text = data.content.map(i=>i.text||'').join('');
-    const p = JSON.parse(text.replace(/```json|```/g,'').trim());
+    if(!check.ok) {
+      // Один повтор с указанием конкретных ошибок
+      document.getElementById('loading-text').textContent = 'Уточняю портрет...';
+      p = normalizeProfile(await callModel(buildPrompt(artists, check.errors)));
+      check = validateProfile(p, artists);
+    }
+
+    if(!check.ok) {
+      loading.classList.remove('visible');
+      document.getElementById('form-section').style.display='block';
+      alert('Не удалось собрать качественный портрет с этим списком. Попробуй ещё раз или измени список артистов.');
+      console.warn('validateProfile errors:', check.errors);
+      return;
+    }
 
     // лёгкая защита от сломанных заголовков
     function cleanTitle(t, fallback) {
@@ -379,10 +496,9 @@ async function analyze() {
       return t;
     }
     p.title = cleanTitle(p.title, 'Твой музыкальный портрет');
-    if(p.centralConflict) p.centralConflict.title = cleanTitle(p.centralConflict.title, 'Внутреннее противоречие');
     if(p.closeness) p.closeness.title = cleanTitle(p.closeness.title, 'Как ты подпускаешь людей');
     if(p.shadow) p.shadow.title = cleanTitle(p.shadow.title, 'Когда защита становится характером');
-    (p.worldExperience||[]).forEach(w => { w.title = cleanTitle(w.title, 'Наблюдение'); });
+    (p.chapters||[]).forEach(c => { c.title = cleanTitle(c.title, 'Наблюдение'); });
 
     loading.classList.remove('visible');
 
@@ -392,14 +508,14 @@ async function analyze() {
     const tagsEl = document.getElementById('essence-tags');
     tagsEl.innerHTML = '';
     (p.essenceTags||[]).forEach(t => {
-      tagsEl.innerHTML += `<div class="essence-tag">${t}</div>`;
+      tagsEl.innerHTML += `<div class="essence-tag">${escapeHtml(t)}</div>`;
     });
 
     const barsEl = document.getElementById('bars');
     barsEl.innerHTML = '';
     (p.bars||[]).forEach(b => {
       barsEl.innerHTML += `<div class="bar-row">
-        <div class="bar-label">${b.label}<small>${b.plain}</small></div>
+        <div class="bar-label">${escapeHtml(b.label)}<small>${escapeHtml(b.plain)}</small></div>
         <div class="bar-track"><div class="bar-fill" data-val="${b.value}%"></div></div>
         <div class="bar-pct">${b.value}%</div>
       </div>`;
@@ -412,76 +528,69 @@ async function analyze() {
       let dnaHtml = '';
       (p.musicPattern.dna||[]).forEach(d => {
         dnaHtml += `<div class="bar-row">
-          <div class="bar-label">${d.label}</div>
+          <div class="bar-label">${escapeHtml(d.label)}</div>
           <div class="bar-track"><div class="bar-fill" data-val="${d.score}%"></div></div>
           <div class="bar-pct">${d.score}%</div>
         </div>`;
       });
       blocksEl.innerHTML += `<div class="result-block">
         <div class="block-header"><div class="block-title">Что объединяет твою музыку</div></div>
-        <div class="block-text">${p.musicPattern.text}</div>
+        <div class="block-text">${escapeHtml(p.musicPattern.text)}</div>
         <div style="margin-top:16px">${dnaHtml}</div>
       </div>`;
     }
 
-    if(p.contrast && p.contrast.text) {
+    (p.chapters||[]).forEach(c => {
       blocksEl.innerHTML += `<div class="result-block">
-        <div class="block-header"><div class="block-title">${p.contrast.title||'Контраст в списке'}</div></div>
-        <div class="block-text">${p.contrast.text}</div>
-      </div>`;
-    }
-
-    (p.worldExperience||[]).forEach(w => {
-      blocksEl.innerHTML += `<div class="result-block">
-        <div class="block-header"><div class="block-title">${w.title}</div></div>
-        <div class="block-text">${w.text}</div>
+        <div class="block-header"><div class="block-title">${escapeHtml(c.title)}</div></div>
+        <div class="block-text">${escapeHtml(c.text)}</div>
       </div>`;
     });
 
-    if(p.centralConflict) {
+    if(p.blindSpot) {
       blocksEl.innerHTML += `<div class="result-block">
-        <div class="block-header"><div class="block-title">${p.centralConflict.title}</div></div>
-        <div class="block-text">${p.centralConflict.text}</div>
-        <div class="conflict-basis">${p.centralConflict.basis||''}</div>
+        <div class="block-header"><div class="block-title">Что ты можешь в себе не замечать</div></div>
+        <div class="block-text">${escapeHtml(p.blindSpot.text)}</div>
       </div>`;
     }
 
     if(p.closeness) {
-      const stars = '★'.repeat(p.closeness.confidence||2) + '☆'.repeat(3-(p.closeness.confidence||2));
+      const conf = p.closeness.confidence || 2;
+      const stars = '★'.repeat(conf) + '☆'.repeat(3-conf);
       blocksEl.innerHTML += `<div class="result-block">
-        <div class="block-header"><div class="block-title">${p.closeness.title}</div></div>
-        <div class="block-text">${p.closeness.text}</div>
-        <div class="confidence-stars">${stars}</div>
+        <div class="block-header"><div class="block-title">${escapeHtml(p.closeness.title)}</div></div>
+        <div class="block-text">${escapeHtml(p.closeness.text)}</div>
+        <div class="confidence-stars">${stars} <span style="opacity:.6;font-size:12px">Уверенность интерпретации: ${conf} из 3</span></div>
       </div>`;
     }
 
     if(p.shadow) {
       blocksEl.innerHTML += `<div class="result-block">
-        <div class="block-header"><div class="block-title">${p.shadow.title}</div></div>
-        <div class="block-text">${p.shadow.text}</div>
+        <div class="block-header"><div class="block-title">${escapeHtml(p.shadow.title)}</div></div>
+        <div class="block-text">${escapeHtml(p.shadow.text)}</div>
       </div>`;
     }
 
     if(p.musicFunction) {
-      let helpsHtml = (p.musicFunction.helps||[]).map(h=>`<li>${h}</li>`).join('');
-      let trapsHtml = (p.musicFunction.traps||[]).map(t=>`<li>${t}</li>`).join('');
+      let helpsHtml = (p.musicFunction.helps||[]).map(h=>`<li>${escapeHtml(h)}</li>`).join('');
+      let trapsHtml = (p.musicFunction.traps||[]).map(t=>`<li>${escapeHtml(t)}</li>`).join('');
       blocksEl.innerHTML += `<div class="result-block">
         <div class="block-header"><div class="block-title">Что музыка делает для тебя</div></div>
         <div class="block-sub" style="margin-bottom:6px">Помогает</div>
         <ul class="music-function-list">${helpsHtml}</ul>
         <div class="block-sub" style="margin:14px 0 6px">Может удерживать</div>
         <ul class="music-function-list">${trapsHtml}</ul>
-        <div class="block-text" style="margin-top:14px"><em>${p.musicFunction.growth||''}</em></div>
+        <div class="block-text" style="margin-top:14px"><em>${escapeHtml(p.musicFunction.growth||'')}</em></div>
       </div>`;
     }
 
     if(p.finalFormula) {
       blocksEl.innerHTML += `<div class="formula-block">
         <div class="block-title" style="margin-bottom:16px;font-size:8px;letter-spacing:3px;color:var(--accent);text-transform:uppercase">Итоговая формула</div>
-        <div class="formula-row"><span>Снаружи</span>${p.finalFormula.outside}</div>
-        <div class="formula-row"><span>Внутри</span>${p.finalFormula.inside}</div>
-        <div class="formula-row"><span>Сила</span>${p.finalFormula.strength}</div>
-        <div class="formula-row" style="margin-bottom:0"><span>Уязвимость</span>${p.finalFormula.vulnerability}</div>
+        <div class="formula-row"><span>Снаружи</span>${escapeHtml(p.finalFormula.outside)}</div>
+        <div class="formula-row"><span>Внутри</span>${escapeHtml(p.finalFormula.inside)}</div>
+        <div class="formula-row"><span>Сила</span>${escapeHtml(p.finalFormula.strength)}</div>
+        <div class="formula-row" style="margin-bottom:0"><span>Уязвимость</span>${escapeHtml(p.finalFormula.vulnerability)}</div>
       </div>`;
     }
 
@@ -496,6 +605,7 @@ async function analyze() {
     loading.classList.remove('visible');
     document.getElementById('form-section').style.display='block';
     alert('Ошибка: ' + err.message);
+    console.error(err);
   }
 }
 
