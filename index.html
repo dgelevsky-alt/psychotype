@@ -272,8 +272,6 @@ function getArtists() {
   return Array.from(document.querySelectorAll('.artist-slot')).map(s=>s.value.trim()).filter(Boolean);
 }
 
-// Безопасная вставка текста: экранирует HTML, чтобы ответ модели
-// не мог вставить теги/скрипты на страницу
 function escapeHtml(str) {
   if(str === null || str === undefined) return '';
   return String(str)
@@ -296,8 +294,6 @@ function countOccurrences(text, word) {
   return m ? m.length : 0;
 }
 
-// Модель иногда возвращает числа строками ("82" вместо 82).
-// Приводим к числу там, где это безопасно, до валидации.
 function toNumber(v) {
   if(typeof v === 'number') return v;
   if(typeof v === 'string' && v.trim() !== '' && !isNaN(v)) return Number(v);
@@ -312,7 +308,6 @@ function normalizeProfile(p) {
   return p;
 }
 
-// Проверяет структуру и качество профиля. Возвращает { ok, errors }
 function validateProfile(p, artists) {
   const errors = [];
 
@@ -354,8 +349,6 @@ function validateProfile(p, artists) {
     if(![1,2,3].includes(p.closeness.confidence)) errors.push('closeness.confidence must be 1-3');
   }
 
-  // artistNotes должен покрывать КАЖДОГО артиста из пользовательского списка,
-  // а не только тех, кого модель решила упомянуть
   if(Array.isArray(artists) && artists.length) {
     if(!Array.isArray(p.artistNotes)) {
       errors.push('artistNotes missing');
@@ -381,7 +374,6 @@ function validateProfile(p, artists) {
 
   if(!p.finalQuote || wordCount(p.finalQuote) < 5) errors.push('finalQuote missing or too short');
 
-  // Проверка повторов запрещённых слов по всему тексту
   const allText = [
     p.musicPattern && p.musicPattern.text,
     ...(p.chapters||[]).map(c=>c.text),
@@ -398,8 +390,7 @@ function validateProfile(p, artists) {
 
   return { ok: errors.length === 0, errors };
 }
-
-function buildPrompt(artists, retryErrors) {
+  function buildPrompt(artists, retryErrors) {
   let retryNote = '';
   if(retryErrors && retryErrors.length) {
     retryNote = `\n\nПРЕДЫДУЩАЯ ПОПЫТКА НЕ ПРОШЛА ПРОВЕРКУ. Исправь эти конкретные проблемы:\n${retryErrors.join('\n')}\n`;
@@ -434,7 +425,46 @@ function buildPrompt(artists, retryErrors) {
   "title": "название 2-5 слов",
   "subtitle": "фраза-подзаголовок 8-15 слов",
   "essenceTags": ["характеристика 1", "характеристика 2", "характеристика 3"],
-< truncated lines 185-225 >
+  "bars": [
+    {"label": "Открытость опыту", "plain": "насколько широко ты воспринимаешь идеи и опыт", "value": 85},
+    {"label": "Добросовестность", "plain": "как превращаешь намерения в действие", "value": 60},
+    {"label": "Экстраверсия", "plain": "откуда восстанавливаешь энергию", "value": 40},
+    {"label": "Доброжелательность", "plain": "как входишь в сотрудничество и конфликт", "value": 55},
+    {"label": "Нейротизм", "plain": "насколько интенсивно переживаешь события", "value": 78}
+  ],
+  "musicPattern": {
+    "text": "100-150 слов, минимум 3 артиста по имени",
+    "dna": [
+      {"label": "Интроспекция", "score": 88},
+      {"label": "Экзистенциальность", "score": 81},
+      {"label": "Экспериментальность", "score": 74},
+      {"label": "Эмоциональная дистанция", "score": 69}
+    ]
+  },
+  "chapters": [
+    {"title": "про восприятие мира, 4-7 слов", "text": "70-110 слов"},
+    {"title": "про действие и результат, 4-7 слов", "text": "70-110 слов"},
+    {"title": "про контакт и конфликт с людьми, 4-7 слов", "text": "70-110 слов"},
+    {"title": "про главное внутреннее противоречие, 5-9 слов", "text": "70-110 слов"}
+  ],
+  "blindSpot": {"text": "70-100 слов"},
+  "closeness": {"title": "Как ты подпускаешь людей", "text": "60-90 слов", "confidence": 2},
+  "shadow": {"title": "Когда защита становится характером", "text": "3-4 предложения"},
+  "musicFunction": {
+    "helps": ["короткий пункт", "короткий пункт"],
+    "traps": ["короткий пункт", "короткий пункт"],
+    "growth": "одна честная фраза"
+  },
+  "finalFormula": {"outside": "строка", "inside": "строка", "strength": "строка", "vulnerability": "строка"},
+  "finalQuote": "15-25 слов",
+  "artistNotes": [
+    {"inputName": "как ввёл пользователь", "canonicalName": "вероятное правильное написание", "status": "known или uncertain"}
+  ]
+}`;
+}
+  async function callModel(prompt) {
+  const res = await fetch("/.netlify/functions/analyze", {
+    method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt: prompt })
   });
@@ -474,7 +504,6 @@ async function analyze() {
     let check = validateProfile(p, artists);
 
     if(!check.ok) {
-      // Один повтор с указанием конкретных ошибок
       document.getElementById('loading-text').textContent = 'Уточняю портрет...';
       p = normalizeProfile(await callModel(buildPrompt(artists, check.errors)));
       check = validateProfile(p, artists);
@@ -488,7 +517,6 @@ async function analyze() {
       return;
     }
 
-    // лёгкая защита от сломанных заголовков
     function cleanTitle(t, fallback) {
       if(!t) return fallback;
       t = t.trim();
